@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5433/wekof
+    command: bun run start:prod
+    volumes:
+      - /app/node_modules
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres  # In real production, use secrets management
+      - POSTGRES_DB=wekof
+    volumes:
+      - wekof_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  wekof_postgres_data: 
