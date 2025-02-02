@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,12 +10,65 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Example {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model Quiz {
+  id          String         @id @default(uuid()) @db.Uuid
+  title       String         @db.VarChar(255)
+  description String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+  steps       Step[]
+  attempts    UserAttempt[]
 
-  @@map("examples")
+  @@map("quizzes")
+}
+
+model Step {
+  id           String        @id @default(uuid()) @db.Uuid
+  quizId       String        @map("quiz_id") @db.Uuid
+  questionText String        @map("question_text")
+  stepOrder    Int          @map("step_order")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  quiz         Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers      Answer[]
+  userAnswers  UserAnswer[]
+
+  @@map("steps")
+}
+
+model Answer {
+  id          String        @id @default(uuid()) @db.Uuid
+  stepId      String        @map("step_id") @db.Uuid
+  answerText  String        @map("answer_text")
+  isCorrect   Boolean       @map("is_correct")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  step        Step          @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  userAnswers UserAnswer[]
+
+  @@map("answers")
+}
+
+model UserAttempt {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  quizId      String        @map("quiz_id") @db.Uuid
+  startedAt   DateTime      @default(now()) @map("started_at")
+  completedAt DateTime?     @map("completed_at")
+  currentStep Int          @default(1) @map("current_step")
+  quiz        Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userAnswers UserAnswer[]
+
+  @@map("user_attempts")
+}
+
+model UserAnswer {
+  id              String      @id @default(uuid()) @db.Uuid
+  attemptId       String      @map("attempt_id") @db.Uuid
+  stepId          String      @map("step_id") @db.Uuid
+  selectedAnswerId String      @map("selected_answer_id") @db.Uuid
+  isCorrect       Boolean     @map("is_correct")
+  answeredAt      DateTime    @default(now()) @map("answered_at")
+  attempt         UserAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  step            Step        @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  selectedAnswer  Answer      @relation(fields: [selectedAnswerId], references: [id], onDelete: Cascade)
+
+  @@map("user_answers")
 } 
