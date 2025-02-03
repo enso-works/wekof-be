@@ -106,35 +106,57 @@ export const getQuizById = async (req: Request<{ id: string }>, res: Response, n
  *   post:
  *     tags:
  *       - Quizzes
- *     summary: Create a new quiz
- *     description: Create a new quiz with steps and answers
+ *     summary: Create one or multiple quizzes
+ *     description: Create either a single quiz or multiple quizzes with their steps and answers
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - title
- *               - steps
- *             properties:
- *               title:
- *                 type: string
- *                 maxLength: 255
- *               description:
- *                 type: string
- *               steps:
- *                 type: array
+ *             oneOf:
+ *               - type: object
+ *                 required:
+ *                   - title
+ *                   - steps
+ *                 properties:
+ *                   title:
+ *                     type: string
+ *                     maxLength: 255
+ *                   description:
+ *                     type: string
+ *                   steps:
+ *                     type: array
+ *                     items:
+ *                       $ref: '#/components/schemas/Step'
+ *                     minItems: 1
+ *               - type: array
  *                 items:
- *                   $ref: '#/components/schemas/Step'
- *                 minItems: 1
+ *                   type: object
+ *                   required:
+ *                     - title
+ *                     - steps
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                       maxLength: 255
+ *                     description:
+ *                       type: string
+ *                     steps:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Step'
+ *                       minItems: 1
  *     responses:
  *       201:
- *         description: Quiz created successfully
+ *         description: Quiz(zes) created successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Quiz'
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/Quiz'
+ *                 - type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Quiz'
  *       400:
  *         description: Validation error
  *         content:
@@ -142,34 +164,69 @@ export const getQuizById = async (req: Request<{ id: string }>, res: Response, n
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-export const createQuiz = async (req: Request<{}, {}, CreateQuizInput>, res: Response, next: NextFunction) => {
+export const createQuiz = async (req: Request<{}, {}, CreateQuizInput | CreateQuizInput[]>, res: Response, next: NextFunction) => {
   try {
-    const validatedData = createQuizSchema.parse(req.body);
-    
-    const quiz = await typedPrisma.quiz.create({
-      data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        steps: {
-          create: validatedData.steps.map(step => ({
-            questionText: step.questionText,
-            stepOrder: step.stepOrder,
-            answers: {
-              create: step.answers
+    if (Array.isArray(req.body)) {
+      // Handle array of quizzes
+      const validatedData = req.body.map(quiz => createQuizSchema.parse(quiz));
+      
+      const quizzes = await typedPrisma.$transaction(
+        validatedData.map(quizData => 
+          typedPrisma.quiz.create({
+            data: {
+              title: quizData.title,
+              description: quizData.description,
+              steps: {
+                create: quizData.steps.map(step => ({
+                  questionText: step.questionText,
+                  stepOrder: step.stepOrder,
+                  answers: {
+                    create: step.answers
+                  }
+                }))
+              }
+            },
+            include: {
+              steps: {
+                include: {
+                  answers: true
+                }
+              }
             }
-          }))
-        }
-      },
-      include: {
-        steps: {
-          include: {
-            answers: true
+          })
+        )
+      );
+
+      res.status(201).json(quizzes);
+    } else {
+      // Handle single quiz
+      const validatedData = createQuizSchema.parse(req.body);
+      
+      const quiz = await typedPrisma.quiz.create({
+        data: {
+          title: validatedData.title,
+          description: validatedData.description,
+          steps: {
+            create: validatedData.steps.map(step => ({
+              questionText: step.questionText,
+              stepOrder: step.stepOrder,
+              answers: {
+                create: step.answers
+              }
+            }))
+          }
+        },
+        include: {
+          steps: {
+            include: {
+              answers: true
+            }
           }
         }
-      }
-    });
+      });
 
-    res.status(201).json(quiz);
+      res.status(201).json(quiz);
+    }
   } catch (error) {
     if (error instanceof ZodError) {
       return res.status(400).json({ 
